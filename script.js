@@ -41,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
         jahresverbrauchWaerme: document.getElementById('jahresverbrauchWaerme'),
         jahresverbrauchKaelte: document.getElementById('jahresverbrauchKaelte'),
         jahresverbrauchVentilator: document.getElementById('jahresverbrauchVentilator'),
-        fanCostActive: document.getElementById('fanCostActive'),
         sfp: document.getElementById('sfp'),
         betriebsstundenGesamt: document.getElementById('betriebsstundenGesamt'),
         betriebstageGesamt: document.getElementById('betriebstageGesamt'),
@@ -73,6 +72,40 @@ document.addEventListener('DOMContentLoaded', () => {
             if (value > max) el.value = max;
         }
     }
+    
+    function clearResults() {
+        dom.nodes.forEach(node => {
+             if (node) {
+                const spans = node.querySelectorAll('span');
+                if (spans.length > 1) {
+                    spans[1].textContent = '--';
+                    spans[3].textContent = '--';
+                    spans[5].textContent = '--';
+                }
+             }
+        });
+        const components = [dom.compVE, dom.compK, dom.compNE];
+        components.forEach(comp => {
+            if(comp && comp.p) comp.p.textContent = formatGerman(NaN, 2);
+            if(comp && comp.wv) comp.wv.textContent = formatGerman(NaN, 2);
+            if(comp && comp.kondensat) comp.kondensat.textContent = formatGerman(NaN, 2);
+        });
+        
+        dom.gesamtleistungWaerme.textContent = `${formatGerman(NaN, 2)} kW`;
+        dom.gesamtleistungKaelte.textContent = `${formatGerman(NaN, 2)} kW`;
+        dom.leistungVentilator.textContent = `${formatGerman(NaN, 2)} kW`;
+        dom.kostenHeizung.textContent = `${formatGerman(NaN, 2)} €/h`;
+        dom.kostenKuehlung.textContent = `${formatGerman(NaN, 2)} €/h`;
+        dom.kostenVentilator.textContent = `${formatGerman(NaN, 2)} €/h`;
+        dom.kostenGesamt.textContent = `${formatGerman(NaN, 2)} €/h`;
+        dom.jahresverbrauchWaerme.textContent = `${formatGerman(NaN, 0)} kWh/a`;
+        dom.jahresverbrauchKaelte.textContent = `${formatGerman(NaN, 0)} kWh/a`;
+        dom.jahresverbrauchVentilator.textContent = `${formatGerman(NaN, 0)} kWh/a`;
+        dom.jahreskostenWaerme.textContent = `${formatGerman(NaN, 0)} €/a`;
+        dom.jahreskostenKaelte.textContent = `${formatGerman(NaN, 0)} €/a`;
+        dom.jahreskostenVentilator.textContent = `${formatGerman(NaN, 0)} €/a`;
+        dom.jahreskostenGesamt.textContent = `${formatGerman(NaN, 0)} €/a`;
+    }
 
     function calculateAll() {
         try {
@@ -90,24 +123,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 preisKaelte: parseFloat(dom.preisKaelte.value) || 0,
                 stundenHeizen: parseFloat(dom.stundenHeizen.value) || 0,
                 stundenKuehlen: parseFloat(dom.stundenKuehlen.value) || 0,
-                fanCostActive: dom.fanCostActive.checked, sfp: parseFloat(dom.sfp.value) || 0,
+                sfp: parseFloat(dom.sfp.value) || 0,
                 betriebsstundenGesamt: parseFloat(dom.betriebsstundenGesamt.value) || 0,
             };
 
+            let plausibilityWarning = null;
+            
             const aussen = { t: inputs.tempAussen, rh: inputs.rhAussen, x: getX(inputs.tempAussen, inputs.rhAussen, inputs.druck) };
-            if (!isFinite(aussen.x)) { dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">Fehler im Außenluft-Zustand.</div>`; return; }
+            if (!isFinite(aussen.x)) {
+                dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">Fehler im Außenluft-Zustand.</div>`; 
+                clearResults();
+                return;
+            }
             aussen.h = getH(aussen.t, aussen.x);
-            dom.processOverviewContainer.innerHTML = ''; 
-
+            
             const massenstrom_kg_s = (inputs.volumenstrom / 3600) * 1.2;
             const zuluftSoll = { t: inputs.tempZuluft };
+            
             if (inputs.kuehlerAktiv && inputs.kuehlmodus === 'dehumidify') {
                  zuluftSoll.rh = inputs.rhZuluft;
                  zuluftSoll.x = getX(zuluftSoll.t, zuluftSoll.rh, inputs.druck); 
                  const zielTaupunkt = getTd(zuluftSoll.x, inputs.druck);
+                 
+                 if (zielTaupunkt < inputs.tempKuehlVorlauf + 2.0) { 
+                    plausibilityWarning = `Plausibilitätsfehler: Kühlwassertemperatur (${formatGerman(inputs.tempKuehlVorlauf, 1)}°C) ist zu hoch, um Luft auf den erforderlichen Taupunkt von ${formatGerman(zielTaupunkt, 1)}°C abzukühlen.`;
+                 }
                  if (zielTaupunkt < MIN_DEW_POINT) {
-                     dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">Warnung: Feuchte-Sollwert erfordert Abkühlung unter ${MIN_DEW_POINT}°C.</div>`;
-                     return;
+                     plausibilityWarning = `Warnung: Feuchte-Sollwert erfordert Abkühlung unter ${MIN_DEW_POINT}°C.`;
                  }
             } else {
                 zuluftSoll.x = aussen.x;
@@ -168,22 +210,18 @@ document.addEventListener('DOMContentLoaded', () => {
             currentPowers.waerme = operations.ve.p + operations.ne.p;
             currentPowers.kaelte = operations.k.p;
             
-            renderAll(states, operations, inputs);
+            renderAll(states, operations, inputs, plausibilityWarning);
         } catch (error) {
             console.error("Ein Fehler ist in calculateAll aufgetreten:", error);
             dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">Ein unerwarteter Fehler ist aufgetreten.</div>`;
         }
     }
-    
-    function formatGerman(num, decimals = 0) {
-        if (isNaN(num)) return '--';
-        return num.toLocaleString('de-DE', {
-            minimumFractionDigits: decimals,
-            maximumFractionDigits: decimals
-        });
+    function formatGerman(num, decimals = 2) {
+        if (isNaN(num) || !isFinite(num)) return '--';
+        return num.toFixed(decimals).replace('.', ',');
     }
 
-    function renderAll(states, operations, inputs) {
+    function renderAll(states, operations, inputs, plausibilityWarning) {
         const finalState = states[3];
         const startState = states[0];
         let colors = ['color-green', 'color-green', 'color-green', 'color-green'];
@@ -208,16 +246,18 @@ document.addEventListener('DOMContentLoaded', () => {
         updateComponentNode(dom.compK, operations.k.p, operations.k.kondensat, operations.k.wv);
         updateComponentNode(dom.compNE, operations.ne.p, -1, operations.ne.wv);
 
-        const activeSteps = Object.values(operations).filter(op => op.p > 0);
-        if (activeSteps.length > 0) {
-            const activeNames = Object.entries(operations).filter(([,op]) => op.p > 0).map(([key]) => key.toUpperCase());
-            const overviewClass = currentPowers.kaelte > 0 ? 'process-info' : 'process-heating';
-            dom.processOverviewContainer.innerHTML = `<div class="process-overview ${overviewClass}">Prozesskette: ${activeNames.join(' → ')}</div>`;
+        if (plausibilityWarning) {
+            dom.processOverviewContainer.innerHTML = `<div class="process-overview process-error">${plausibilityWarning}</div>`;
         } else {
-            dom.processOverviewContainer.innerHTML = `<div class="process-overview process-success">Idealzustand</div>`;
+            const activeSteps = Object.values(operations).filter(op => op.p > 0);
+            if (activeSteps.length > 0) {
+                const activeNames = Object.entries(operations).filter(([,op]) => op.p > 0).map(([key]) => key.toUpperCase());
+                const overviewClass = currentPowers.kaelte > 0 ? 'process-info' : 'process-heating';
+                dom.processOverviewContainer.innerHTML = `<div class="process-overview ${overviewClass}">Prozesskette: ${activeNames.join(' → ')}</div>`;
+            } else {
+                dom.processOverviewContainer.innerHTML = `<div class="process-overview process-success">Idealzustand</div>`;
+            }
         }
-
-        dom.summaryContainer.innerHTML = (operations.ve.p > 0 && operations.ne.p > 0) ? `<div class="process-step summary"><h4>➕ Gesamt-Heizleistung</h4><div class="result-grid"><div class="result-item"><span class="label">Leistung (VE + NE)</span><span class="value">${formatGerman(currentPowers.waerme, 2)} kW</span></div></div></div>` : '';
         
         dom.gesamtleistungWaerme.textContent = `${formatGerman(currentPowers.waerme, 2)} kW`;
         dom.gesamtleistungKaelte.textContent = `${formatGerman(currentPowers.kaelte, 2)} kW`;
@@ -227,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const kostenHeizung = currentPowers.waerme * inputs.preisWaerme;
         const kostenKuehlung = currentPowers.kaelte * inputs.preisKaelte;
-        const kostenVentilator = inputs.fanCostActive ? leistungVentilator * inputs.preisStrom : 0;
+        const kostenVentilator = leistungVentilator * inputs.preisStrom;
         
         currentTotalCost = kostenHeizung + kostenKuehlung + kostenVentilator;
         
@@ -241,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const jahresVerbrauchWaerme = currentPowers.waerme * inputs.stundenHeizen;
         const jahresVerbrauchKaelte = currentPowers.kaelte * inputs.stundenKuehlen;
-        const jahresVerbrauchVentilator = inputs.fanCostActive ? leistungVentilator * inputs.betriebsstundenGesamt : 0;
+        const jahresVerbrauchVentilator = leistungVentilator * inputs.betriebsstundenGesamt;
         
         dom.jahresverbrauchWaerme.textContent = `${formatGerman(jahresVerbrauchWaerme, 0)} kWh/a`;
         dom.jahresverbrauchKaelte.textContent = `${formatGerman(jahresVerbrauchKaelte, 0)} kWh/a`;
@@ -258,12 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.jahreskostenVentilator.parentElement.title = `${formatGerman(jahresVerbrauchVentilator,0)} kWh/a × ${formatGerman(inputs.preisStrom,2)} €/kWh`;
         dom.jahreskostenGesamt.textContent = `${formatGerman(jahreskostenWaerme + jahreskostenKaelte + jahreskostenVentilator, 0)} €/a`;
         
-        dom.fanCostDisplays.forEach(d => d.classList.toggle('hidden', !inputs.fanCostActive));
-        
         dom.setReferenceBtn.className = referenceState ? 'activated' : '';
         dom.setReferenceBtn.textContent = referenceState ? 'Referenz gesetzt' : 'Referenz festlegen';
 
-        dom.referenceDetails.classList.toggle('invisible', !referenceState);
         if (referenceState) {
             dom.kostenReferenz.textContent = `${formatGerman(referenceState.cost, 2)} €/h`;
             const changeAbs = currentTotalCost - referenceState.cost;
@@ -278,10 +315,17 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.rhAenderung.textContent = `${deltaRh >= 0 ? '+' : ''}${formatGerman(deltaRh,1)} %`;
             const deltaVol = inputs.volumenstrom - referenceState.vol;
             dom.volumenAenderung.textContent = `${deltaVol >= 0 ? '+' : ''}${formatGerman(deltaVol,0)} m³/h`;
+        } else {
+             dom.kostenReferenz.textContent = '--';
+             dom.kostenAenderung.textContent = '--';
+             dom.tempAenderung.textContent = '--';
+             dom.rhAenderung.textContent = '--';
+             dom.volumenAenderung.textContent = '--';
         }
     }
     
     function updateStateNode(node, state, colorClass, isInactive = false) {
+        if (!node) return;
         node.className = 'state-node';
         if (colorClass) node.classList.add(colorClass);
         if (isInactive) node.classList.add('inactive');
@@ -292,6 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         spans[5].textContent = formatGerman(state.x, 2);
     }
     function updateComponentNode(comp, power, kondensat = -1, wasserstrom = 0) {
+        if (!comp || !comp.p) return;
         comp.p.textContent = formatGerman(power, 2);
         comp.node.classList.toggle('active', power > 0);
         comp.node.classList.toggle('inactive', power <= 0);
@@ -334,6 +379,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkedKuehlmodus = document.querySelector('input[name="kuehlmodus"]:checked');
         const isDehumidify = checkedKuehlmodus ? checkedKuehlmodus.value === 'dehumidify' : false;
         dom.sollFeuchteWrapper.style.display = isActive && isDehumidify ? 'block' : 'none';
+        
+        const rhSliderGroup = document.getElementById('rhZuluftSliderGroup');
+        if (rhSliderGroup) rhSliderGroup.style.display = isActive && isDehumidify ? 'block' : 'none';
     }
     
     function syncAllSlidersToInputs(){
@@ -342,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syncSliderToInput(dom.rhZuluft, dom.rhZuluftSlider, dom.rhZuluftLabel, true);
     }
     function syncSliderToInput(input, slider, label, isFloat = false) {
+        if (!input || !slider || !label) return;
         const newValue = parseFloat(input.value);
         if(isNaN(newValue)) return;
         
@@ -378,15 +427,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addEventListeners() {
-        // --- Buttons ---
         if (dom.resetBtn) dom.resetBtn.addEventListener('click', resetToDefaults);
         if (dom.resetSlidersBtn) dom.resetSlidersBtn.addEventListener('click', resetSlidersToRef);
         if (dom.setReferenceBtn) dom.setReferenceBtn.addEventListener('click', handleSetReference);
 
-        // --- All other inputs and selects ---
         const allInputs = document.querySelectorAll('input:not([type=button]), select');
         allInputs.forEach(el => {
+            if (!el) return;
             const eventType = (el.tagName === 'SELECT' || el.type === 'checkbox' || el.type === 'radio') ? 'change' : 'input';
+            
             el.addEventListener(eventType, (e) => {
                 const target = e.target;
                 if (target.type === 'number') enforceLimits(target);
@@ -405,9 +454,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateBetriebszeit(target.id);
                 }
                 
-                if (target.id === 'kuehlerAktiv' || target.name === 'kuehlmodus' || target.id === 'feuchteSollTyp') {
+                if (target.name === 'kuehlmodus' || target.id === 'kuehlerAktiv') {
                     handleKuehlerToggle();
                 }
+
                 calculateAll();
             });
         });
