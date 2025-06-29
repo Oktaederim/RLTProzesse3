@@ -27,13 +27,23 @@ body {
     width: 100%;
 }
 
-.card-header, .section-header {
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    gap: 1rem;
+    flex-wrap: wrap; /* Hilft bei kleinen Bildschirmen */
+}
+
+.section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
     gap: 1rem;
 }
+
 
 #resetBtn {
     background-color: #6c757d;
@@ -46,8 +56,8 @@ body {
     font-weight: bold;
     transition: background-color 0.2s;
     flex-shrink: 0;
+    margin-left: auto; /* Schiebt den Button nach rechts, aber nicht ganz an den Rand */
 }
-#resetBtn:hover { background-color: #5a6268; }
 
 h1, h2, h4, h5 {
     color: var(--primary-color);
@@ -55,7 +65,7 @@ h1, h2, h4, h5 {
     margin-top: 0;
 }
 h1 { font-size: 2.2rem; text-align: center; margin-bottom: 0.5rem;}
-h2 { font-size: 1.6rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1.5rem;}
+h2 { font-size: 1.6rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1.5rem; flex-grow: 1;}
 .card-header h2 { border-bottom: none; padding-bottom: 0; margin: 0; }
 .section-header h4 { border-bottom: none; padding-bottom: 0; margin: 0; }
 h5 { font-size: 1rem; color: #333; margin-bottom: 0.8rem; }
@@ -228,15 +238,6 @@ input:checked + .slider:before { transform: translateX(26px); }
 
 .hidden { display: none !important; }
 #reference-details { transition: all 0.3s ease-in-out; }
-#reference-details.invisible {
-    visibility: hidden;
-    max-height: 0;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    margin-top: 0 !important;
-    border-top: none;
-    overflow: hidden;
-}
 
 #resetSlidersBtn {
     font-size: 0.9rem; background: none; border: 1px solid var(--primary-color);
@@ -272,6 +273,9 @@ input[type="range"]::-moz-range-thumb {
     background-color: #e9ecef; padding: 0.5rem 0.8rem;
     border-radius: 6px; margin-bottom: 0.5rem;
 }
+.fan-power-display {
+    margin-top: 1rem;
+}
 .cost-display.power-summary .cost-label, .cost-display.power-summary .cost-value {
     font-weight: bold; color: var(--primary-color); background: none;
 }
@@ -295,7 +299,7 @@ input[type="range"]::-moz-range-thumb {
     background-color: var(--primary-color);
     color: white; border: none; padding: 0.8rem 1.2rem;
     border-radius: 6px; cursor: pointer; font-size: 1rem;
-    font-weight: bold; width: 100%; margin: 1rem 0;
+    font-weight: bold; width: 100%; margin: 1.5rem 0 0.5rem 0;
     transition: background-color 0.2s;
 }
 #setReferenceBtn:hover { background-color: #0056b3; }
@@ -304,17 +308,14 @@ input[type="range"]::-moz-range-thumb {
 .footer { text-align: center; margin-top: 2rem; color: #888; font-size: 0.9rem; }
 hr { border: none; border-top: 1px solid var(--border-color); margin: 1.5rem 0; }
 hr.section-divider { margin-top: 2rem; }
-h4.annual-cost-header, #annual-cost-estimation h5 { margin-top: 1.5rem; color: var(--text-color);}
-p.info-text {
-    font-size: 0.85rem;
-    font-style: italic;
-    color: var(--label-color);
-    background-color: var(--secondary-color);
-    padding: 0.8rem;
-    border-radius: 6px;
-    margin-top: -0.5rem;
-    margin-bottom: 1.5rem;
+#annual-cost-estimation {
+    background: #ffffff;
+    padding-top: 1.5rem;
+    border-radius: 8px;
 }
+#annual-cost-estimation h4 { color: var(--primary-color); }
+#annual-cost-estimation h5 { margin-top: 1.5rem; color: var(--text-color);}
+
 .formula-card {
     background-color: #f8f9fa;
     border: 1px solid var(--border-color);
